@@ -1,2 +1,8 @@
 language: csharp
 solution: RTSP.sln
+install:
+  - nuget restore RTSP.sln
+  - nuget install NUnit.Runners -Version 2.6.4 -OutputDirectory testrunner
+script:
+  - xbuild /p:Configuration=Release RTSP.sln
+  - mono ./testrunner/NUnit.Runners.2.6.4/tools/nunit-console.exe ./RTSP.Tests/bin/Release/RTSP.Tests.dll
