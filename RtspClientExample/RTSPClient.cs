@@ -691,8 +691,14 @@ namespace RtspClientExample
                     string[] parts = message.Headers[RtspHeaderNames.Public].Split(',');
                     foreach (string part in parts)
                     {
-                        if (part.Trim().ToUpper().Equals("GET_PARAMETER")) server_supports_get_parameter = true;
-                        if (part.Trim().ToUpper().Equals("SET_PARAMETER")) server_supports_set_parameter = true;
+                        if (part.Trim().ToUpper().Equals("GET_PARAMETER"))
+                        {
+                            server_supports_get_parameter = true;
+                        }
+                        if (part.Trim().ToUpper().Equals("SET_PARAMETER"))
+                        {
+                            server_supports_set_parameter = true;
+                        }
                     }
                 }
 
@@ -754,7 +760,7 @@ namespace RtspClientExample
                 _logger.LogDebug("Got reply from Setup. Session is {session}", message.Session);
 
                 session = message.Session ?? ""; // Session value used with Play, Pause, Teardown and and additional Setups
-                if (keepaliveTimer!=null && message.Timeout > 0 && message.Timeout > keepaliveTimer.Interval / 1000)
+                if (keepaliveTimer != null && message.Timeout > 0 && message.Timeout > keepaliveTimer.Interval / 1000)
                 {
                     keepaliveTimer.Interval = message.Timeout * 1000 / 2;
                 }
@@ -932,7 +938,7 @@ namespace RtspClientExample
                         videoPayloadProcessor = video_codec switch
                         {
                             "H264" => new H264Payload(null),
-                            "H265" => new H265Payload(false),
+                            "H265" => new H265Payload(false, null),
                             _ => null,
                         };
 

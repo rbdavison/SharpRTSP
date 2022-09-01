@@ -24,6 +24,7 @@ namespace RtspForwarderExample
 
         private readonly TcpListener _RTSPServerListener;
         private readonly ILoggerFactory _loggerFactory;
+        private readonly ILogger _logger;
         private ManualResetEvent _Stopping;
         private Thread _ListenTread;
 
@@ -67,6 +68,7 @@ namespace RtspForwarderExample
             RtspUtils.RegisterUri();
             _RTSPServerListener = new TcpListener(IPAddress.Any, portNumber);
             _loggerFactory = loggerFactory;
+            _logger = _loggerFactory.CreateLogger<RtspServer>();
         }
 
         /// <summary>
@@ -93,7 +95,7 @@ namespace RtspForwarderExample
                 {
                     // Wait for an incoming TCP Connection
                     TcpClient oneClient = _RTSPServerListener.AcceptTcpClient();
-                    Console.WriteLine("Connection from " + oneClient.Client.RemoteEndPoint.ToString());
+                    _logger.LogDebug("Connection from " + oneClient.Client.RemoteEndPoint.ToString());
 
                     // Hand the incoming TCP connection over to the RTSP classes
                     var rtsp_socket = new RtspTcpTransport(oneClient);
@@ -127,8 +129,6 @@ namespace RtspForwarderExample
                 // _logger.Error("Got an error listening...", error);
                 throw;
             }
-
-
         }
 
 
@@ -165,8 +165,7 @@ namespace RtspForwarderExample
             Rtsp.RtspListener listener = sender as Rtsp.RtspListener;
             Rtsp.Messages.RtspMessage message = e.Message as Rtsp.Messages.RtspMessage;
 
-            Console.WriteLine("RTSP message received " + message);
-
+            _logger.LogDebug("RTSP message received " + message);
 
             // Check if the RTSP Message has valid authentication (validating against username,password,realm and nonce)
             if (auth != null)
@@ -242,12 +241,10 @@ namespace RtspForwarderExample
             // Handle DESCRIBE message
             if (message is Rtsp.Messages.RtspRequestDescribe)
             {
-                String requested_url = (message as Rtsp.Messages.RtspRequestDescribe).RtspUri.ToString();
-                Console.WriteLine("Request for " + requested_url);
+                string requested_url = (message as Rtsp.Messages.RtspRequestDescribe).RtspUri.ToString();
+                _logger.LogDebug("Request for " + requested_url);
 
                 // TODO. Check the requsted_url is valid. In this example we accept any RTSP URL
-
-
 
                 // if the SPS and PPS are not defined yet, we have to return an error
                 if (raw_sps == null || raw_pps == null)
@@ -257,7 +254,6 @@ namespace RtspForwarderExample
                     listener.SendMessage(describe_response2);
                     return;
                 }
-
 
                 // Make the Base64 SPS and PPS
                 // raw_sps has no 0x00 0x00 0x00 0x01 or 32 bit size header
@@ -352,7 +348,7 @@ namespace RtspForwarderExample
                         udp_pair.DataReceived += (object local_sender, RtspChunkEventArgs local_e) =>
                         {
                             // RTCP data received
-                            //Console.WriteLine("RTCP data received " + local_sender.ToString() + " " + local_e.ToString());
+                            _logger.LogDebug("RTCP data received " + local_sender.ToString() + " " + local_e.ToString());
                             // TODO - Find the Connection and update the keepalive
                         };
                         udp_pair.Start(); // start listening for data on the UDP ports
@@ -589,8 +585,7 @@ namespace RtspForwarderExample
 
                     if (sending_rtp_via_tcp == false && ((now - connection.time_since_last_rtsp_keepalive).TotalSeconds > timeout_in_seconds))
                     {
-
-                        Console.WriteLine("Removing session " + connection.session_id + " due to TIMEOUT");
+                        _logger.LogDebug("Removing session " + connection.session_id + " due to TIMEOUT");
                         connection.play = false; // stop sending data
                         if (connection.video.udp_pair != null)
                         {
@@ -628,7 +623,7 @@ namespace RtspForwarderExample
 
             checkTimeouts(out current_rtsp_count, out current_rtsp_play_count);
 
-            // Console.WriteLine(current_rtsp_count + " RTSP clients connected. " + current_rtsp_play_count + " RTSP clients in PLAY mode");
+            _logger.LogDebug(current_rtsp_count + " RTSP clients connected. " + current_rtsp_play_count + " RTSP clients in PLAY mode");
 
             if (current_rtsp_play_count == 0) return;
 
@@ -767,23 +762,35 @@ namespace RtspForwarderExample
             {
 
                 // Go through each RTSP connection and output the NAL on the Video Session
-                foreach (RTSPConnection connection in rtspConnectionList.ToArray()) // ToArray makes a temp copy of the list.
-                                                                                    // This lets us delete items in the foreach
-                                                                                    // eg when there is Write Error
+                foreach (RTSPConnection connection in rtspConnectionList.ToArray())
                 {
+                    // ToArray makes a temp copy of the list.
+                    // This lets us delete items in the foreach
+                    // eg when there is Write Error
+
                     // Only process Sessions in Play Mode
-                    if (connection.play == false) continue;
+                    if (connection.play == false)
+                    {
+                        continue;
+                    }
 
-                    String connection_type = "";
-                    if (connection.video.client_transport.LowerTransport == Rtsp.Messages.RtspTransport.LowerTransportType.TCP) connection_type = "TCP";
-                    if (connection.video.client_transport.LowerTransport == Rtsp.Messages.RtspTransport.LowerTransportType.UDP
-                        && connection.video.client_transport.IsMulticast == false) connection_type = "UDP";
-                    if (connection.video.client_transport.LowerTransport == Rtsp.Messages.RtspTransport.LowerTransportType.UDP
-                        && connection.video.client_transport.IsMulticast == true) connection_type = "Multicast";
+                    string connection_type = "";
+                    if (connection.video.client_transport.LowerTransport == Rtsp.Messages.RtspTransport.LowerTransportType.TCP)
+                    {
+                        connection_type = "TCP";
+                    }
+                    if (connection.video.client_transport.LowerTransport == Rtsp.Messages.RtspTransport.LowerTransportType.UDP &&
+                        connection.video.client_transport.IsMulticast == false)
+                    {
+                        connection_type = "UDP";
+                    }
+                    if (connection.video.client_transport.LowerTransport == Rtsp.Messages.RtspTransport.LowerTransportType.UDP &&
+                        connection.video.client_transport.IsMulticast == true)
+                    {
+                        connection_type = "Multicast";
+                    }
 
-
-                    //Console.WriteLine("Sending video session " + connection.session_id + " " + connection_type + " Timestamp(ms)=" + timestamp_ms + ". RTP timestamp=" + rtp_timestamp + ". Sequence=" + connection.video.sequence_number);
-
+                    _logger.LogDebug("Sending video session " + connection.session_id + " " + connection_type + " Timestamp(ms)=" + timestamp_ms + ". RTP timestamp=" + rtp_timestamp + ". Sequence=" + connection.video.sequence_number);
 
                     if (connection.video.must_send_rtcp_packet)
                     {
@@ -858,7 +865,7 @@ namespace RtspForwarderExample
                             }
                             catch
                             {
-                                Console.WriteLine("Error writing RTCP Sender Report to listener " + connection.listener.RemoteAdress);
+                                _logger.LogError("Error writing RTCP Sender Report to listener " + connection.listener.RemoteAdress);
                             }
                         }
 
@@ -873,8 +880,8 @@ namespace RtspForwarderExample
                             }
                             catch (Exception e)
                             {
-                                Console.WriteLine("UDP Write Exception " + e.ToString());
-                                Console.WriteLine("Error writing RTCP to listener " + connection.listener.RemoteAdress);
+                                _logger.LogError("UDP Write Exception " + e.ToString());
+                                _logger.LogError("Error writing RTCP to listener " + connection.listener.RemoteAdress);
                             }
                         }
 
@@ -914,7 +921,7 @@ namespace RtspForwarderExample
                             }
                             catch
                             {
-                                Console.WriteLine("Error writing to listener " + connection.listener.RemoteAdress);
+                                _logger.LogError("Error writing to listener " + connection.listener.RemoteAdress);
                                 write_error = true;
                                 break; // exit out of foreach loop
                             }
@@ -932,8 +939,8 @@ namespace RtspForwarderExample
                             }
                             catch (Exception e)
                             {
-                                Console.WriteLine("UDP Write Exception " + e.ToString());
-                                Console.WriteLine("Error writing to listener " + connection.listener.RemoteAdress);
+                                _logger.LogError("UDP Write Exception " + e.ToString());
+                                _logger.LogError("Error writing to listener " + connection.listener.RemoteAdress);
                                 write_error = true;
                                 break; // exit out of foreach loop
                             }
@@ -978,7 +985,7 @@ namespace RtspForwarderExample
 
             checkTimeouts(out current_rtsp_count, out current_rtsp_play_count);
 
-            // Console.WriteLine(current_rtsp_count + " RTSP clients connected. " + current_rtsp_play_count + " RTSP clients in PLAY mode");
+            _logger.LogDebug(current_rtsp_count + " RTSP clients connected. " + current_rtsp_play_count + " RTSP clients in PLAY mode");
 
             if (current_rtsp_play_count == 0) return;
 
@@ -1039,15 +1046,22 @@ namespace RtspForwarderExample
                     if (connection.audio.client_transport == null) continue;
 
                     String connection_type = "";
-                    if (connection.audio.client_transport.LowerTransport == Rtsp.Messages.RtspTransport.LowerTransportType.TCP) connection_type = "TCP";
-                    if (connection.audio.client_transport.LowerTransport == Rtsp.Messages.RtspTransport.LowerTransportType.UDP
-                        && connection.audio.client_transport.IsMulticast == false) connection_type = "UDP";
-                    if (connection.audio.client_transport.LowerTransport == Rtsp.Messages.RtspTransport.LowerTransportType.UDP
-                        && connection.audio.client_transport.IsMulticast == true) connection_type = "Multicast";
+                    if (connection.audio.client_transport.LowerTransport == Rtsp.Messages.RtspTransport.LowerTransportType.TCP)
+                    {
+                        connection_type = "TCP";
+                    }
+                    if (connection.audio.client_transport.LowerTransport == Rtsp.Messages.RtspTransport.LowerTransportType.UDP &&
+                        connection.audio.client_transport.IsMulticast == false)
+                    {
+                        connection_type = "UDP";
+                    }
+                    if (connection.audio.client_transport.LowerTransport == Rtsp.Messages.RtspTransport.LowerTransportType.UDP &&
+                        connection.audio.client_transport.IsMulticast == true)
+                    {
+                        connection_type = "Multicast";
+                    }
 
-
-                    Console.WriteLine("Sending audio session " + connection.session_id + " " + connection_type + " Timestamp(ms)=" + timestamp_ms + ". RTP timestamp=" + rtp_timestamp + ". Sequence=" + connection.audio.sequence_number);
-
+                    _logger.LogDebug("Sending audio session " + connection.session_id + " " + connection_type + " Timestamp(ms)=" + timestamp_ms + ". RTP timestamp=" + rtp_timestamp + ". Sequence=" + connection.audio.sequence_number);
 
                     if (connection.audio.must_send_rtcp_packet)
                     {
@@ -1122,7 +1136,7 @@ namespace RtspForwarderExample
                             }
                             catch
                             {
-                                Console.WriteLine("Error writing RTCP Sender Report to listener " + connection.listener.RemoteAdress);
+                                _logger.LogError("Error writing RTCP Sender Report to listener " + connection.listener.RemoteAdress);
                             }
                         }
 
@@ -1137,8 +1151,8 @@ namespace RtspForwarderExample
                             }
                             catch (Exception e)
                             {
-                                Console.WriteLine("UDP Write Exception " + e.ToString());
-                                Console.WriteLine("Error writing RTCP to listener " + connection.listener.RemoteAdress);
+                                _logger.LogError("UDP Write Exception " + e.ToString());
+                                _logger.LogError("Error writing RTCP to listener " + connection.listener.RemoteAdress);
                             }
                         }
 
@@ -1147,14 +1161,12 @@ namespace RtspForwarderExample
                             // TODO. Add Multicast
                         }
 
-
                         // Clear the flag. A timer may set this to True again at some point to send regular Sender Reports
                         //HACK  connection.must_send_rtcp_packet = false; // A Timer may set this to true again later in case it is used as a Keepalive (eg IndigoVision)
                     }
 
-
                     // There could be more than 1 RTP packet (if the data is fragmented)
-                    Boolean write_error = false;
+                    bool write_error = false;
                     {
                         // Add the specific data for each transmission
                         RTPPacketUtil.WriteSequenceNumber(rtp_packet, connection.audio.sequence_number);
@@ -1162,7 +1174,6 @@ namespace RtspForwarderExample
 
                         // Add the specific SSRC for each transmission
                         RTPPacketUtil.WriteSSRC(rtp_packet, connection.ssrc);
-
 
                         // Send as RTP over RTSP (Interleaved)
                         if (connection.audio.transport_reply.LowerTransport == Rtsp.Messages.RtspTransport.LowerTransportType.TCP)
@@ -1177,7 +1188,7 @@ namespace RtspForwarderExample
                             }
                             catch
                             {
-                                Console.WriteLine("Error writing to listener " + connection.listener.RemoteAdress);
+                                _logger.LogError("Error writing to listener " + connection.listener.RemoteAdress);
                                 write_error = true;
                                 break; // exit out of foreach loop
                             }
@@ -1195,8 +1206,8 @@ namespace RtspForwarderExample
                             }
                             catch (Exception e)
                             {
-                                Console.WriteLine("UDP Write Exception " + e.ToString());
-                                Console.WriteLine("Error writing to listener " + connection.listener.RemoteAdress);
+                                _logger.LogError("UDP Write Exception " + e.ToString());
+                                _logger.LogError("Error writing to listener " + connection.listener.RemoteAdress);
                                 write_error = true;
                                 break; // exit out of foreach loop
                             }
@@ -1206,7 +1217,7 @@ namespace RtspForwarderExample
                     }
                     if (write_error)
                     {
-                        Console.WriteLine("Removing session " + connection.session_id + " due to write error");
+                        _logger.LogError("Removing session " + connection.session_id + " due to write error");
                         connection.play = false; // stop sending data
                         if (connection.video.udp_pair != null)
                         {

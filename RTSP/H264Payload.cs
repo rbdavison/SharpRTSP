@@ -19,8 +19,6 @@ namespace Rtsp
         // Eg all the RTP Packets from M=0 through to M=1
         private readonly List<byte[]> temporaryRtpPayloads = new(); 
                                                                   
-
-
         private readonly MemoryStream fragmentedNal = new(); // used to concatenate fragmented H264 NALs where NALs are split over RTP packets
 
 
@@ -32,7 +30,6 @@ namespace Rtsp
 
         public List<byte[]> ProcessRTPPacket(byte[] rtp_payload, int rtp_marker)
         {
-
             // Add to the list of payloads for the current Frame of video
             temporaryRtpPayloads.Add(rtp_payload); // Todo Could optimise this and go direct to Process Frame if just 1 packet in frame
 
@@ -167,7 +164,6 @@ namespace Rtsp
                         nalUnits.Add(fragmentedNal.ToArray());
                     }
                 }
-
                 else if (nal_header_type == 29)
                 {
                     _logger.LogDebug("Frag FU-B not supported");
@@ -177,7 +173,6 @@ namespace Rtsp
                 {
                     _logger.LogDebug("Unknown NAL header {nalHeaderType} not supported", nal_header_type);
                 }
-
             }
 
             // Output some statistics

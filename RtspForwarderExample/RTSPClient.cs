@@ -904,7 +904,7 @@ namespace RtspForwarderExample
                         videoPayloadProcessor = video_codec switch
                         {
                             "H264" => new H264Payload(null),
-                            "H265" => new H265Payload(false),
+                            "H265" => new H265Payload(false, null),
                             _ => null,
                         };
 

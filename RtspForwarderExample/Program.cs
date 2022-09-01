@@ -42,7 +42,6 @@ namespace RtspForwarderExample
 
             Console.WriteLine("RTSP URL is rtsp://" + username + ":" + password + "@" + "hostname:" + port);
 
-
             // Setup the Client
             RTSPClient client = new(loggerFactory.CreateLogger<RTSPClient>());
             client.ReceivedSpsPps += Client_ReceivedSpsPps;
