@@ -344,7 +344,7 @@ public class RtspServer : IDisposable
                 {
                     // RTP over UDP mode
                     // Create a pair of UDP sockets - One is for the Data (eg Video/Audio), one is for the RTCP
-                    udp_pair = new Rtsp.UDPSocket(50000, 51000); // give a range of 500 pairs (1000 addresses) to try incase some address are in use
+                    udp_pair = new Rtsp.UDPSocket(50000, 51000, _loggerFactory.CreateLogger<UDPSocket>()); // give a range of 500 pairs (1000 addresses) to try incase some address are in use
                     udp_pair.DataReceived += (object local_sender, RtspChunkEventArgs local_e) =>
                     {
                         // RTCP data received

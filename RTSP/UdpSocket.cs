@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging;
+using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -8,6 +9,7 @@ namespace Rtsp
     public class UDPSocket
     {
 
+        private readonly ILogger _logger;
         private readonly UdpClient dataSocket;
         private readonly UdpClient controlSocket;
 
@@ -17,18 +19,18 @@ namespace Rtsp
         public int dataPort;
         public int controlPort;
 
-        bool isMulticast = false;
-        IPAddress? dataMulticastAddress;
-        IPAddress? controlMulticastAddress;
+        private readonly bool isMulticast = false;
+        private readonly IPAddress? dataMulticastAddress;
+        private readonly IPAddress? controlMulticastAddress;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="UDPSocket"/> class.
         /// Creates two new UDP sockets using the start and end Port range
         /// </summary>
-        public UDPSocket(int startPort, int endPort)
+        public UDPSocket(int startPort, int endPort, ILogger logger)
         {
-
             isMulticast = false;
+            _logger = logger;
 
             // open a pair of UDP sockets - one for data (video or audio) and one for the status channel (RTCP messages)
             dataPort = startPort;
@@ -48,9 +50,13 @@ namespace Rtsp
                 {
                     // Fail to allocate port, try again
                     if (dataSocket != null)
+                    {
                         dataSocket.Close();
+                    }
                     if (controlSocket != null)
+                    {
                         controlSocket.Close();
+                    }
 
                     // try next data or control port
                     dataPort += 2;
@@ -63,7 +69,6 @@ namespace Rtsp
                     dataSocket!.Client.SendBufferSize = 65535; // default is 8192. Make it as large as possible for large RTP packets which are not fragmented
 
                     controlSocket!.Client.DontFragment = false;
-
                 }
             }
 
@@ -71,19 +76,16 @@ namespace Rtsp
             {
                 throw new InvalidOperationException("UDP Forwader host was not initialized, can't continue");
             }
-
-            
         }
-
 
         /// <summary>
         /// Initializes a new instance of the <see cref="UDPSocket"/> class.
         /// Used with Multicast mode with the Multicast Address and Port
         /// </summary>
-        public UDPSocket(string data_multicast_address, int data_multicast_port, string control_multicast_address, int control_multicast_port)
+        public UDPSocket(string data_multicast_address, int data_multicast_port, string control_multicast_address, int control_multicast_port, ILogger logger)
         {
-
             isMulticast = true;
+            _logger = logger;
 
             // open a pair of UDP sockets - one for data (video or audio) and one for the status channel (RTCP messages)
             this.dataPort = data_multicast_port;
@@ -105,21 +107,23 @@ namespace Rtsp
                 controlSocket.Client.Bind(control_ep);
                 controlSocket.JoinMulticastGroup(controlMulticastAddress);
 
-
                 dataSocket.Client.ReceiveBufferSize = 100 * 1024;
                 dataSocket.Client.SendBufferSize = 65535; // default is 8192. Make it as large as possible for large RTP packets which are not fragmented
 
-
                 controlSocket.Client.DontFragment = false;
-
             }
             catch (SocketException)
             {
                 // Fail to allocate port, try again
                 if (dataSocket != null)
+                {
                     dataSocket.Close();
+                }
                 if (controlSocket != null)
+                {
                     controlSocket.Close();
+                }
+
                 throw;
             }
 
@@ -181,13 +185,11 @@ namespace Rtsp
             DataReceived?.Invoke(this, rtspChunkEventArgs);
         }
 
-
         /// <summary>
         /// Does the video job.
         /// </summary>
         private void DoWorkerJob(UdpClient socket, int data_port)
         {
-
             IPEndPoint ipEndPoint = new IPEndPoint(IPAddress.Any, data_port);
             try
             {
@@ -198,24 +200,20 @@ namespace Rtsp
 
                     // We have an RTP frame.
                     // Fire the DataReceived event with 'frame'
-                    Console.WriteLine("Received RTP data on port " + data_port);
+                    _logger.LogDebug("Received RTP data on port " + data_port);
 
-                    Rtsp.Messages.RtspChunk currentMessage = new Rtsp.Messages.RtspData();
-                    // aMessage.SourcePort = ??
-                    currentMessage.Data = frame;
+                    Rtsp.Messages.RtspChunk currentMessage = new Rtsp.Messages.RtspData
+                    {
+                        // SourcePort = ??
+                        Data = frame
+                    };
                     ((Rtsp.Messages.RtspData)currentMessage).Channel = data_port;
 
-
                     OnDataReceived(new RtspChunkEventArgs(currentMessage));
-
                 }
             }
-            catch (ObjectDisposedException)
-            {
-            }
-            catch (SocketException)
-            {
-            }
+            catch (ObjectDisposedException) { }
+            catch (SocketException) { }
         }
 
         /// <summary>
